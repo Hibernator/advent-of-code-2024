@@ -5,7 +5,7 @@ import ch.hibernator.adventofcode.SolutionBase
 object Day2 extends SolutionBase[Seq[Seq[Int]]]:
   override def day: Int = 2
 
-  override def calculateCommonResult(input: Seq[String]): Seq[Seq[Int]] = {
+  override def intermediateResult(input: Seq[String]): Seq[Seq[Int]] = {
     input.map(_.split(" ").map(_.toInt).toSeq)
   }
 

@@ -8,7 +8,7 @@ import scala.util.Using
 
 trait SolutionBase[CommonResult]:
   def day: Int
-  def calculateCommonResult(input: Seq[String]): CommonResult
+  def intermediateResult(input: Seq[String]): CommonResult
   def solvePart1(input: Seq[String], commonResult: CommonResult): Long
   def solvePart2(input: Seq[String], commonResult: CommonResult): Long
 
@@ -38,8 +38,8 @@ trait SolutionBase[CommonResult]:
     Using(Source.fromFile(s"./src/main/resources/test-input/$day.txt"))(_.getLines().toSeq).get
   protected val input: Seq[String] =
     Using(Source.fromFile(inputFileAddress))(_.getLines().toSeq).get
-  protected val testCommonResult: CommonResult = calculateCommonResult(testInput)
-  protected val commonResult: CommonResult = calculateCommonResult(input)
+  protected val testCommonResult: CommonResult = intermediateResult(testInput)
+  protected val commonResult: CommonResult = intermediateResult(input)
 
   def main(args: Array[String]): Unit = {
     val testResultPart1 = solvePart1(testInput, testCommonResult)

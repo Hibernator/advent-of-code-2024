@@ -10,7 +10,7 @@ object Day4 extends SolutionBase[Puzzle]:
 
   override def day: Int = 4
 
-  override def calculateCommonResult(input: Seq[String]): Puzzle =
+  override def intermediateResult(input: Seq[String]): Puzzle =
     val puzzle = input.map(_.toCharArray).toArray
     assert(puzzle.forall(_.length == puzzle.head.length))
     Puzzle(puzzle)

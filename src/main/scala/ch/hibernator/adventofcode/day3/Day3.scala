@@ -9,7 +9,7 @@ object Day3 extends SolutionBase[String]:
 
   override def day: Int = 3
 
-  override def calculateCommonResult(input: Seq[String]): String = input.head
+  override def intermediateResult(input: Seq[String]): String = input.head
 
   override def solvePart1(input: Seq[String], commonResult: String): Long =
     findAndAddMultiplications(commonResult)

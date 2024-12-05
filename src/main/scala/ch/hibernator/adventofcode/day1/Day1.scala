@@ -5,7 +5,7 @@ import ch.hibernator.adventofcode.SolutionBase
 object Day1 extends SolutionBase[(Seq[Int], Seq[Int])]:
   override def day: Int = 1
 
-  override def calculateCommonResult(input: Seq[String]): (Seq[Int], Seq[Int]) =
+  override def intermediateResult(input: Seq[String]): (Seq[Int], Seq[Int]) =
     val (list1, list2) =
       input.map(_.split(" {3}")).map(both => (both.head.toInt, both.last.toInt)).foldLeft((Seq[Int](), Seq[Int]())) {
         case ((list1, list2), (first, second)) =>
