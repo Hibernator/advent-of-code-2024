@@ -82,7 +82,15 @@ object FullGridXy:
     def allNeighbors4: Seq[Location] =
       Direction4.values.map(direction => move(direction))
 
+    def isNeighbor4Of(other: Location): Boolean = allNeighbors4.contains(other)
+
     override def toString: String = s"[$x,$y]"
+
+    infix def manhattanDistanceTo(other: Location): Long = (x - other.x).abs + (y - other.y).abs
+
+    def direction4FromNeighbor(neighbor: Location): Direction4 =
+      assert(neighbor.isNeighbor4Of(this))
+      Direction4.values.find(neighbor.move(_) == this).get
 
   case class LocationWithValue[T](location: Location, value: T):
     def show(using Show[T]): Unit = print(s"($location -> ${value.show})")
