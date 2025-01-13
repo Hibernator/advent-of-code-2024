@@ -11,10 +11,13 @@ import ch.hibernator.adventofcode.util.mutable.FullGridXy.Location
 
 import scala.annotation.tailrec
 import scala.collection.mutable
+import scala.compiletime.uninitialized
 import scala.util.control.Breaks
 import scala.util.control.Breaks.break
 
 object Day16 extends SolutionBaseSimple:
+  private val bogusLocation = Location(50_000, 50_000)
+
   override def day: Int = 16
 
   override def solve(input: Seq[String]): (Long, Long) =
@@ -50,15 +53,10 @@ object Day16 extends SolutionBaseSimple:
           case Direction4.Right =>
             if location.y == endLocation.y then distance else distance + 1000
 
-    // A* algorithm, also records multiple paths for the second part of the puzzle
-
-    val stepPredecessors = mutable.Map[Step, mutable.Buffer[Step]]().withDefaultValue(mutable.Buffer())
-
+    // A* algorithm, finds all shortest paths for the second part of the puzzle
+    // Usually, the algorithm finds one shortest path, but here all of them are needed
+    // For each step, keeps track of the previous steps
     def cheapestPath: Step =
-//      given Ordering[Step] = Ordering.fromLessThan { (step1, step2) =>
-//        step1.estimatedTotalCost < step2.estimatedTotalCost
-//      }
-
       given Ordering[Step] = Ordering.fromLessThan { (step1, step2) =>
         step1.costFromStart < step2.costFromStart
       }
@@ -73,42 +71,53 @@ object Day16 extends SolutionBaseSimple:
         while openList.nonEmpty
         do
           openList.sortInPlace()
+          println(s"Open list")
+          openList.foreach(item => println(s"${item.location}, ${item.costFromStart}"))
           val currentStep = openList.remove(0)
-          if currentStep.location == endLocation then
-            currentStep.costFromStart =
-              currentStep.previousStep.costFromStart + currentStep.costFromNeighborStep(currentStep.previousStep)
-            result = currentStep
-            break()
+          // check if path from any existing closed steps yields the same result
+          closedList
+            .find { pastStep =>
+              !currentStep.previousSteps.contains(pastStep) &&
+              pastStep.location.isNeighbor4Of(currentStep.location) &&
+              pastStep.costFromStart + currentStep.costFromNeighborStep(pastStep) == currentStep.costFromStart
+            }
+            .foreach { pastStep =>
+              currentStep.previousSteps.append(pastStep)
+            }
           closedList.add(currentStep)
+          // check if the finish was reached
+          if currentStep.location == endLocation then
+            currentStep.costFromStart = currentStep.previousSteps.head.costFromStart + currentStep.costFromNeighborStep(
+              currentStep.previousSteps.head
+            )
+            if result == null then result = currentStep
+//            break() // we still need to find other shortest paths
           val potentialNextSteps =
             Direction4.values
               .map(direction => Step(currentStep.location.move(direction), direction))
               .filterNot(step => grid.get(step.location) == Wall)
-              .filterNot(step => step.location == currentStep.location)
+              .filterNot { step =>
+                // first step doesn't have a previous step, bogusLocation is needed
+                step.location == currentStep.previousSteps.headOption.map(_.location).getOrElse(bogusLocation)
+              }
 
           Breaks.breakable {
             for nextStep <- potentialNextSteps
             do
+              val tentativeCostFromStart = currentStep.costFromStart + nextStep.costFromNeighborStep(currentStep)
               if closedList.contains(nextStep)
               then
+                val actualNextStep = closedList.find(_ == nextStep).get
+                val bestCostFromStartSoFar = actualNextStep.costFromStart
                 break()
-
-              val tentativeCostFromStart = currentStep.costFromStart + nextStep.costFromNeighborStep(currentStep)
 
               if !openList.contains(nextStep) then openList.addOne(nextStep)
               val actualNextStep = openList.find(_ == nextStep).get
               val bestCostFromStartSoFar = Option(actualNextStep.costFromStart).getOrElse(Long.MaxValue)
-              if tentativeCostFromStart >= bestCostFromStartSoFar
-              then
-//                if tentativeCostFromStart == bestCostFromStartSoFar // alternative best path
-//                then
-//                  val existingPredecessors = stepPredecessors(actualNextStep)
-//                  stepPredecessors.put(actualNextStep, existingPredecessors.append(currentStep))
-                break() // this path is not better
+              if tentativeCostFromStart >= bestCostFromStartSoFar then break() // this path is not better
 
               // this path is best so far
-
-              actualNextStep.previousStep = currentStep
+              actualNextStep.previousSteps.append(currentStep)
               actualNextStep.costFromStart = tentativeCostFromStart
               actualNextStep.estimatedCostToEnd = estimatedCostToEnd(nextStep)
           }
@@ -121,13 +130,23 @@ object Day16 extends SolutionBaseSimple:
     val onePath = finalStep.pathFromStart
 
     println(result)
+    println(s"Path length = ${onePath.size}")
 
-    (result, 1L)
+    val shortestPathsLocations = finalStep.allPathsFromStart.map(_.location).toSet
+    shortestPathsLocations.foreach { location =>
+      grid.set(location, Tile.Path)
+    }
+    println(grid.asText)
+
+    // The calculated result is actually higher than the real result
+    val result2 = shortestPathsLocations.size
+
+    (result, result2)
 
   given Show[Tile] = Show.fromToString
 
 case class Step(location: Location, direction: Direction4):
-  var previousStep: Step = _
+  var previousSteps: mutable.Buffer[Step] = mutable.Buffer()
 
   def costFromNeighborStep(neighbor: Step): Int =
     assert(neighbor.location.isNeighbor4Of(location))
@@ -139,7 +158,7 @@ case class Step(location: Location, direction: Direction4):
   var costFromStart: Long = Long.MaxValue
 
   // h
-  var estimatedCostToEnd: Long = _
+  var estimatedCostToEnd: Long = uninitialized
 
   // f
   def estimatedTotalCost: Long = costFromStart + estimatedCostToEnd
@@ -147,8 +166,20 @@ case class Step(location: Location, direction: Direction4):
   def pathFromStart: mutable.Buffer[Step] =
     @tailrec
     def pathFromStart(step: Step, acc: mutable.Buffer[Step]): mutable.Buffer[Step] =
-      if step.previousStep == null then acc.prepend(step)
-      else pathFromStart(step.previousStep, acc.prepend(step))
+      if step.previousSteps.isEmpty then acc.prepend(step)
+      else pathFromStart(step.previousSteps.head, acc.prepend(step))
+
+    pathFromStart(this, mutable.Buffer())
+
+  def allPathsFromStart: mutable.Buffer[Step] =
+    @tailrec
+    def pathFromStart(step: Step, acc: mutable.Buffer[Step]): mutable.Buffer[Step] =
+      if step.previousSteps.isEmpty then acc.append(step)
+      else if step.previousSteps.sizeIs == 1 then pathFromStart(step.previousSteps.head, acc.append(step))
+      else
+        acc.append(step)
+        acc.appendAll(step.previousSteps.head.allPathsFromStart)
+        acc.appendAll(step.previousSteps(1).allPathsFromStart)
 
     pathFromStart(this, mutable.Buffer())
 
@@ -159,6 +190,7 @@ enum Tile(representation: Char):
   case Wall extends Tile('#')
   case Start extends Tile('S')
   case End extends Tile('E')
+  case Path extends Tile('O')
 
 object Tile:
   def fromChar(char: Char): Tile =
