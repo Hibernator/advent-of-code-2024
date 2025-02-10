@@ -51,6 +51,17 @@ class FullGridXy[T](grid: Array[Array[T]]):
     val location = findValueLocation(value)
     Option.when(isWithinBorders(location))(location)
 
+  def getNeighborLocationValue(location: Location, direction: Direction4): Option[LocationWithValue[T]] =
+    val newLocation = location.move(direction)
+    Option.when(isWithinBorders(newLocation))(LocationWithValue(newLocation, get(newLocation)))
+
+  def findLocationsWithValue(value: T): Seq[Location] =
+    for
+      x <- 0 to maxX
+      y <- 0 to maxY
+      location <- Option.when(get(x, y) == value)(Location(x, y))
+    yield location
+
   def copy: FullGridXy[T] =
     val newInnerArray = Array.fill(numColumns)(Array.fill[Any](numRows)(null))
     for
