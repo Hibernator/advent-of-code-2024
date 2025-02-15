@@ -2,6 +2,7 @@ package ch.hibernator.adventofcode.day20
 
 import cats.Show
 import ch.hibernator.adventofcode.SolutionBaseSimple
+import ch.hibernator.adventofcode.day20.Tile.Wall
 import ch.hibernator.adventofcode.util.Direction4
 import ch.hibernator.adventofcode.util.Direction4.{Down, Up}
 import ch.hibernator.adventofcode.util.mutable.FullGridXy
@@ -45,11 +46,11 @@ object Day20 extends SolutionBaseSimple:
         assert(nextTrackLocations.sizeIs == 1)
         processTrack(nextTrackLocations.head, trackLocationToTime, time + 1)
 
-    val trackLocationToTime = processTrack(startLocation, mutable.Map[Location, Int](), 0)
+    val trackLocationToTime = processTrack(startLocation, mutable.LinkedHashMap[Location, Int](), 0)
     val defaultTrackTime = trackLocationToTime.size - 1
 
-    // Returns a cheat with start and end point to bypass the wall at the specified location
-    def cheatPointStartEnd(location: Location): Option[CheatPoint] =
+    // Returns a cheat with start and end point to bypass the wall at the specified location (part 1 only)
+    def cheatPointStartEnd(location: Location): Option[Cheat] =
       assert(grid.get(location) == Tile.Wall)
       if grid.getNeighborLocationValue(location, Up).exists(_.value.isOnTrack) && grid
           .getNeighborLocationValue(location, Down)
@@ -57,19 +58,19 @@ object Day20 extends SolutionBaseSimple:
       then
         val upTime = trackLocationToTime(location.move(Up))
         val downTime = trackLocationToTime(location.move(Down))
-        if upTime > downTime then Some(CheatPoint(location.move(Down), location.move(Up)))
-        else Some(CheatPoint(location.move(Up), location.move(Down)))
+        if upTime > downTime then Some(Cheat(location.move(Down), location.move(Up)))
+        else Some(Cheat(location.move(Up), location.move(Down)))
       else if grid.getNeighborLocationValue(location, Direction4.Left).exists(_.value.isOnTrack) && grid
           .getNeighborLocationValue(location, Direction4.Right)
           .exists(_.value.isOnTrack)
       then
         val leftTime = trackLocationToTime(location.move(Direction4.Left))
         val rightTime = trackLocationToTime(location.move(Direction4.Right))
-        if leftTime > rightTime then Some(CheatPoint(location.move(Direction4.Right), location.move(Direction4.Left)))
-        else Some(CheatPoint(location.move(Direction4.Left), location.move(Direction4.Right)))
+        if leftTime > rightTime then Some(Cheat(location.move(Direction4.Right), location.move(Direction4.Left)))
+        else Some(Cheat(location.move(Direction4.Left), location.move(Direction4.Right)))
       else None
 
-    // Checks if the wall location can be bypassed by a cheat
+    // Checks if the wall location can be bypassed by a cheat (part 1 only)
     def isCheatPoint(location: Location): Boolean =
       (grid
         .getNeighborLocationValue(location, Up)
@@ -80,14 +81,10 @@ object Day20 extends SolutionBaseSimple:
         .exists(_.value.isOnTrack))
 
     // Calculates time saved by the cheat
-    def cheatTimeSave(cheatPoint: CheatPoint): Int =
-      trackLocationToTime(cheatPoint.end) - trackLocationToTime(cheatPoint.start) - 2
-
-    val walls = grid.findLocationsWithValue(Tile.Wall)
-    val cheatPointWalls = walls.filter(isCheatPoint)
-    val cheatPoints = cheatPointWalls.flatMap(cheatPointStartEnd)
-    val savedTimes = cheatPoints.map(cheatTimeSave)
-    val significantCheatPoints = savedTimes.count(_ == 10)
+    def cheatTimeSave(cheatPoint: Cheat): Int =
+      trackLocationToTime(cheatPoint.end) - trackLocationToTime(cheatPoint.start) - cheatPoint.start
+        .manhattanDistanceTo(cheatPoint.end)
+        .toInt
 
     val result1 = grid
       .findLocationsWithValue(Tile.Wall)
@@ -96,7 +93,17 @@ object Day20 extends SolutionBaseSimple:
       .map(cheatTimeSave)
       .count(_ >= 100)
 
-    (result1, 1L)
+    // Part 2
+    val result2 = trackLocationToTime.map { (location, defaultTime) =>
+      grid
+        .locationsWithinManhattanDistanceFrom(location, 20, 2)
+        .filterNot(grid.get(_) == Wall)
+        .map(Cheat(location, _))
+        .map(cheatTimeSave)
+        .count(_ >= 100)
+    }.sum
+
+    (result1, result2)
 
 enum Tile(val key: Char):
   case Track extends Tile('.')
@@ -111,4 +118,4 @@ enum Tile(val key: Char):
 object Tile:
   def forKey(keyChar: Char): Tile = Tile.values.find(_.key == keyChar).get
 
-case class CheatPoint(start: Location, end: Location)
+case class Cheat(start: Location, end: Location)

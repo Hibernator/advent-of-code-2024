@@ -33,7 +33,7 @@ class FullGridXy[T](grid: Array[Array[T]]):
 
   def isWithinBorders(location: Location): Boolean = isWithinBorders(location.x, location.y)
 
-  def isWithinBorders(x: Int, y: Int): Boolean = x > -1 && y > -1 && x < numRows && y < numColumns
+  def isWithinBorders(x: Int, y: Int): Boolean = x > -1 && y > -1 && x < numColumns && y < numRows
 
   def conditionalNeighbors(location: Location)(
       filter: T => Boolean
@@ -81,6 +81,17 @@ class FullGridXy[T](grid: Array[Array[T]]):
 
     builder.toString()
 
+  def locationsWithManhattanDistanceFrom(start: Location, distance: Int): Seq[Location] =
+    (for
+      xDelta <- -distance to distance
+      yDeltaAbs = distance - xDelta.abs
+      yDelta <- Set(-yDeltaAbs, yDeltaAbs)
+    yield start.move(xDelta, yDelta))
+      .filter(isWithinBorders)
+
+  def locationsWithinManhattanDistanceFrom(start: Location, maxDistance: Int, minDistance: Int = 1): Seq[Location] =
+    (minDistance to maxDistance).flatMap(locationsWithManhattanDistanceFrom(start, _))
+
 object FullGridXy:
   case class Location(x: Int, y: Int):
     def move(direction: Direction4): Location =
@@ -89,6 +100,8 @@ object FullGridXy:
         case Direction4.Down  => Location(x, y + 1)
         case Direction4.Left  => Location(x - 1, y)
         case Direction4.Right => Location(x + 1, y)
+
+    def move(xDelta: Int, yDelta: Int): Location = this.copy(x = x + xDelta, y = y + yDelta)
 
     def allNeighbors4: Seq[Location] =
       Direction4.values.map(direction => move(direction))
