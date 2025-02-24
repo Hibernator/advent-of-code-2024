@@ -2,7 +2,7 @@ package ch.hibernator.adventofcode.day21
 
 import cats.Show
 import ch.hibernator.adventofcode.SolutionBaseSimple
-import ch.hibernator.adventofcode.util.Direction4
+import ch.hibernator.adventofcode.util.{Direction4, Direction8}
 import ch.hibernator.adventofcode.util.mutable.FullGridXy
 import ch.hibernator.adventofcode.util.mutable.FullGridXy.Location
 
@@ -73,6 +73,7 @@ object Day21 extends SolutionBaseSimple:
             frontier.addOne(LocationWithDistanceFromStart(neighbor, alternativeDistance))
         }
 
+      // Reconstructs all the paths
       def constructPathsFromEnd: mutable.Buffer[mutable.Buffer[Location]] =
 
         @tailrec
@@ -111,7 +112,7 @@ object Day21 extends SolutionBaseSimple:
 
     // finds all paths on numpad that can be taken to enter the code
     // the push field specifies whether the button needs to be pushed (part of the code)
-    def findShortestPathsOfCode(code: String): Seq[Seq[LocationWithPush]] =
+    def findAllShortestPathsOfCode(code: String): Seq[Seq[LocationWithPush]] =
       val pathsBetweenNumbers =
         s"A$code"
           .sliding(2)
@@ -190,8 +191,10 @@ object Day21 extends SolutionBaseSimple:
 
       pathsAcc.map(_.toSeq).toSeq
 
+    // A naive algorithm to find all shortest combinations of presses on the last directional keyboard
+    // It is inefficient and can't be scaled to longer keyboard chains
     def findShortestCombinationSizeForCode(code: String): Int =
-      val firstArrowPadCombinations = findShortestPathsOfCode(code).map(pathToArrows).sortBy(_.size)
+      val firstArrowPadCombinations = findAllShortestPathsOfCode(code).map(pathToArrows).sortBy(_.size)
       val firstArrowPadCombinationsShortestSize = firstArrowPadCombinations.head.size
       val shortestFirstArrowPadCombinations =
         firstArrowPadCombinations.filter(_.size == firstArrowPadCombinationsShortestSize)
@@ -207,10 +210,193 @@ object Day21 extends SolutionBaseSimple:
       val thirdArrowPadCombinationsShortestSize = thirdArrowPadCombinations.head.size
       thirdArrowPadCombinationsShortestSize
 
-    val result1 = input.map(code => code.take(3).toInt * findShortestCombinationSizeForCode(code)).sum
+//    val result1 = input.map(code => code.take(3).toInt * findShortestCombinationSizeForCode(code)).sum
+//    println(result1)
+
+    // Part 2
+    // Part 1 solution is not scalable because the number of shortest paths per robot grows too fast
+    // Part 1 solution is also completely overengineered
+    // Part 1 solution already takes a while with 4 keypads only. Even memoization wouldn't help
+
+    /*
+      Greedy algorithm for finding ONE shortest path:
+      - on both numpad and arrow pad at most one turn is needed for every start and end
+        - this minimizes the number of travels to A on arrow pad
+        - for example zig-zag from 7 to 3 (74523) on numpad would result in too long path on arrow pad
+        - path with one turn only (78963) would be more efficient on arrow pad
+      - the empty corner has to be taken into account and avoided
+        - on numpad, when going from up-left to bottom-right, right movement needs to be preferred
+        - on numpad, when going from down-right to top left, up movement has to be preferred
+        - on arrow pad, when going in up-right direction, right movement is preferred
+        - on arrow pad, when going in down-left direction, down movement is preferred
+      - for other diagonal directions, there are also preferred movements (even though it doesn't look like it at first)
+     */
+
+    // Finds a path on numpad between two buttons
+    def numpadPath(start: NumPadValue, end: NumPadValue): Seq[Direction4] =
+      if start == end then Nil
+      else
+        val startLocation = numPad.findValueLocation(start)
+        val endLocation = numPad.findValueLocation(end)
+        val direction = startLocation.direction8To(endLocation)
+        val verticalDistance = startLocation.verticalDistanceTo(endLocation)
+        val horizontalDistance = startLocation.horizontalDistanceTo(endLocation)
+        direction match
+          case Direction8.Left  => Seq.fill(horizontalDistance)(Direction4.Left)
+          case Direction8.Right => Seq.fill(horizontalDistance)(Direction4.Right)
+          case Direction8.Up    => Seq.fill(verticalDistance)(Direction4.Up)
+          case Direction8.Down  => Seq.fill(verticalDistance)(Direction4.Down)
+          case Direction8.DownLeft =>
+            Seq.fill(horizontalDistance)(Direction4.Left) ++ Seq.fill(verticalDistance)(Direction4.Down)
+          case Direction8.DownRight if NumPadValue.LeftRow.contains(start) && NumPadValue.BottomRow.contains(end) =>
+            Seq.fill(horizontalDistance)(Direction4.Right) ++ Seq.fill(verticalDistance)(Direction4.Down)
+          case Direction8.DownRight =>
+            Seq.fill(verticalDistance)(Direction4.Down) ++ Seq.fill(horizontalDistance)(Direction4.Right)
+          case Direction8.UpLeft if NumPadValue.BottomRow.contains(start) && NumPadValue.LeftRow.contains(end) =>
+            Seq.fill(verticalDistance)(Direction4.Up) ++ Seq.fill(horizontalDistance)(Direction4.Left)
+          case Direction8.UpLeft =>
+            Seq.fill(horizontalDistance)(Direction4.Left) ++ Seq.fill(verticalDistance)(Direction4.Up)
+          case Direction8.UpRight =>
+            Seq.fill(verticalDistance)(Direction4.Up) ++ Seq.fill(horizontalDistance)(Direction4.Right)
+
+    // Finds a path on directional keyboard between two buttons
+    def arrowPadPath(start: ArrowPadValue, end: ArrowPadValue): Seq[Direction4] =
+      if start == end then Nil
+      else
+        val startLocation = arrowPad.findValueLocation(start)
+        val endLocation = arrowPad.findValueLocation(end)
+        val direction = startLocation.direction8To(endLocation)
+        val verticalDistance = startLocation.verticalDistanceTo(endLocation)
+        val horizontalDistance = startLocation.horizontalDistanceTo(endLocation)
+        direction match
+          case Direction8.Left  => Seq.fill(horizontalDistance)(Direction4.Left)
+          case Direction8.Right => Seq.fill(horizontalDistance)(Direction4.Right)
+          case Direction8.Up    => Seq.fill(verticalDistance)(Direction4.Up)
+          case Direction8.Down  => Seq.fill(verticalDistance)(Direction4.Down)
+          case Direction8.DownLeft if end == ArrowPadValue.Left =>
+            Seq.fill(verticalDistance)(Direction4.Down) ++ Seq.fill(horizontalDistance)(Direction4.Left)
+          case Direction8.DownLeft =>
+            Seq.fill(horizontalDistance)(Direction4.Left) ++ Seq.fill(verticalDistance)(Direction4.Down)
+          case Direction8.DownRight =>
+            Seq.fill(verticalDistance)(Direction4.Down) ++ Seq.fill(horizontalDistance)(Direction4.Right)
+          case Direction8.UpLeft =>
+            Seq.fill(horizontalDistance)(Direction4.Left) ++ Seq.fill(verticalDistance)(Direction4.Up)
+          case Direction8.UpRight if start == ArrowPadValue.Left =>
+            Seq.fill(horizontalDistance)(Direction4.Right) ++ Seq.fill(verticalDistance)(Direction4.Up)
+          case Direction8.UpRight =>
+            Seq.fill(verticalDistance)(Direction4.Up) ++ Seq.fill(horizontalDistance)(Direction4.Right)
+
+    // Memoize all paths
+    val numpadPaths = mutable.Map[(NumPadValue, NumPadValue), Seq[Direction4]]()
+    val arrowPadPaths = mutable.Map[(ArrowPadValue, ArrowPadValue), Seq[Direction4]]()
+
+    for
+      start <- NumPadValue.values
+      end <- NumPadValue.values
+    do numpadPaths.addOne((start, end), numpadPath(start, end))
+
+    for
+      start <- ArrowPadValue.values
+      end <- ArrowPadValue.values
+    do arrowPadPaths.addOne((start, end), arrowPadPath(start, end))
+
+    // Returns a sequence of presses on directional keyboard that needs to be pressed in order to enter the numeric code
+    def codeToArrowButtons(code: String): Seq[ArrowPadValue] =
+      val acc = mutable.Buffer[ArrowPadValue]()
+      s"A$code".sliding(2).foreach { pair =>
+        val (start, end) = (NumPadValue.fromChar(pair.head), NumPadValue.fromChar(pair.last))
+        acc.appendAll(numpadPaths(start, end).map(ArrowPadValue.fromDirection))
+        acc.append(ArrowPadValue.A)
+      }
+      acc.toSeq
+
+    // Returns a sequence of directional keyboard presses that needs to be pushed on the next directional keyboard
+    // to navigate between two locations on the current keyboard
+    def arrowsToArrowButtons(start: ArrowPadValue, end: ArrowPadValue): Seq[ArrowPadValue] =
+      val acc = mutable.Buffer[ArrowPadValue]()
+      Seq(start, end)
+        .sliding(2)
+        .foreach { pair =>
+          val (start, end) = (pair.head, pair.last)
+          acc.appendAll(arrowPadPaths(start, end).map(ArrowPadValue.fromDirection))
+          acc.append(ArrowPadValue.A)
+        }
+      acc.toSeq
+
+    // Memoize all the moves on directional keyboard
+    val arrowsToArrowButtonsMap = mutable.Map[(ArrowPadValue, ArrowPadValue), Seq[ArrowPadValue]]()
+    for
+      start <- ArrowPadValue.values.filterNot(_ == ArrowPadValue.Empty)
+      end <- ArrowPadValue.values.filterNot(_ == ArrowPadValue.Empty)
+    do arrowsToArrowButtonsMap.addOne((start, end), arrowsToArrowButtons(start, end))
+
+    // Calculates the amount of presses on the final directional keyboard in order to enter the numeric code
+    // The amount of presses is large, therefore it can't be represented as sequence of presses
+    // We can only calculate the number of presses, not the actual sequence
+    // It's a depth-first search (from numeric keyboard to the final directional keyboard)
+    // The intermediate results are memoized, otherwise we'd be exploring same paths over and over again
+    // Potential problem, the inner numPressesForState function is not tail-recursive, so the scalability is limited
+    def codeToArrowPadPresses(code: String, numDirectionalKeyboards: Int): Long =
+      val firstArrows = codeToArrowButtons(code)
+      var pressesAcc: Long = 0L
+      val toExplore = mutable.Buffer[StateToExplore]()
+
+      toExplore.append(StateToExplore(1, mutable.Buffer.from(firstArrows), startedExploring = false))
+
+      val level1Presses = firstArrows
+      val level2Presses = mutable.Buffer[ArrowPadValue]()
+      val finalPresses = mutable.Buffer[ArrowPadValue]()
+
+      val stateToPresses = mutable.Map[StateToExplore, Long]()
+
+      def numPressesForState(state: StateToExplore): Long =
+        val maybePresses = stateToPresses.get(state)
+        maybePresses match
+          case Some(presses) => presses
+          case None =>
+            val presses = {
+              val level = state.level
+              val pathToExplore = state.path
+              if level == numDirectionalKeyboards then pathToExplore.size.toLong
+              else if pathToExplore.sizeIs == 1
+              then
+                if !state.startedExploring then 1L
+                else 0L
+              else
+                val newLevel = level + 1
+                if !state.startedExploring then
+                  val (start, end) = (ArrowPadValue.A, pathToExplore.head)
+                  val newPath = mutable.Buffer.from(arrowsToArrowButtonsMap(start, end))
+                  numPressesForState(StateToExplore(newLevel, newPath, startedExploring = false)) + numPressesForState(
+                    state.copy(startedExploring = true)
+                  )
+                else
+                  val (start, end) = (pathToExplore.head, pathToExplore.tail.head)
+                  val newPath = mutable.Buffer.from(arrowsToArrowButtonsMap(start, end))
+                  numPressesForState(StateToExplore(newLevel, newPath, startedExploring = false)) + numPressesForState(
+                    state.copy(path = pathToExplore.tail)
+                  )
+            }
+            stateToPresses.addOne(state, presses)
+            presses
+
+      numPressesForState(StateToExplore(1, mutable.Buffer.from(firstArrows), startedExploring = false))
+
+    val result1 = input.map { code =>
+      val arrowPresses = codeToArrowPadPresses(code, 3)
+      val codeNumber = code.init.toInt
+      arrowPresses * codeNumber.toLong
+    }.sum
     println(result1)
 
-    (result1, 1L)
+    val result2 =
+      input
+        .map: code =>
+          val arrowPresses = codeToArrowPadPresses(code, 26)
+          val codeNumber = code.init.toInt
+          arrowPresses * codeNumber.toLong
+        .sum
+    (result1, result2)
 
 abstract class Blockable(val blocked: Boolean)
 
@@ -233,6 +419,10 @@ enum NumPadValue(val representation: Char, blocked: Boolean = false) extends Blo
 object NumPadValue:
   def fromChar(value: Char): NumPadValue = NumPadValue.values.find(_.representation == value).get
 
+  val LeftRow: Set[NumPadValue] = Set(NumPadValue.Seven, NumPadValue.Four, NumPadValue.One)
+
+  val BottomRow: Set[NumPadValue] = Set(NumPadValue.Zero, NumPadValue.A)
+
 enum ArrowPadValue(val representation: Char, blocked: Boolean = false) extends Blockable(blocked):
   override def toString: String = representation.toString
 
@@ -253,6 +443,8 @@ object ArrowPadValue:
       case Direction4.Left  => ArrowPadValue.Left
       case Direction4.Right => ArrowPadValue.Right
 
+  val TopRow: Set[ArrowPadValue] = Set(ArrowPadValue.Up, ArrowPadValue.A)
+
 case class LocationWithDistanceFromStart(location: Location, distance: Int)
 
 object LocationWithDistanceFromStart:
@@ -260,3 +452,5 @@ object LocationWithDistanceFromStart:
   given Ordering[LocationWithDistanceFromStart] = Ordering.fromLessThan((loc1, loc2) => loc1.distance > loc2.distance)
 
 case class LocationWithPush(location: Location, push: Boolean)
+
+case class StateToExplore(level: Int, path: mutable.Buffer[ArrowPadValue], var startedExploring: Boolean)

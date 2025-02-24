@@ -3,7 +3,7 @@ package ch.hibernator.adventofcode.util.mutable
 import cats.Show
 import cats.implicits.toShow
 import cats.syntax.all.*
-import ch.hibernator.adventofcode.util.Direction4
+import ch.hibernator.adventofcode.util.{Direction4, Direction8}
 import ch.hibernator.adventofcode.util.mutable.FullGridXy.{Location, LocationWithValue}
 
 /** Array-backed grid.<br/><br/>
@@ -115,6 +115,21 @@ object FullGridXy:
     def direction4FromNeighbor(neighbor: Location): Direction4 =
       assert(neighbor.isNeighbor4Of(this))
       Direction4.values.find(neighbor.move(_) == this).get
+
+    def direction8To(other: Location): Direction8 =
+      (other.x - x, other.y - y) match
+        case (0, deltaY) if deltaY < 0                    => Direction8.Up
+        case (0, deltaY) if deltaY > 0                    => Direction8.Down
+        case (deltaX, 0) if deltaX < 0                    => Direction8.Left
+        case (deltaX, 0) if deltaX > 0                    => Direction8.Right
+        case (deltaX, deltaY) if deltaX < 0 && deltaY < 0 => Direction8.UpLeft
+        case (deltaX, deltaY) if deltaX > 0 && deltaY < 0 => Direction8.UpRight
+        case (deltaX, deltaY) if deltaX < 0 && deltaY > 0 => Direction8.DownLeft
+        case (deltaX, deltaY) if deltaX > 0 && deltaY > 0 => Direction8.DownRight
+
+    def verticalDistanceTo(other: Location): Int = (y - other.y).abs
+
+    def horizontalDistanceTo(other: Location): Int = (x - other.x).abs
 
   case class LocationWithValue[T](location: Location, value: T):
     def show(using Show[T]): Unit = print(s"($location -> ${value.show})")
